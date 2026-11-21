@@ -8,6 +8,7 @@ use axum::{Json, Router};
 use serde::Serialize;
 
 use crate::state::AppState;
+use crate::telemetry;
 
 const READY_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -15,6 +16,7 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/health/live", get(live))
         .route("/health/ready", get(ready))
+        .merge(telemetry::router())
         .with_state(state)
 }
 

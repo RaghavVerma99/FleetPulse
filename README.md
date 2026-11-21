@@ -2,11 +2,12 @@
 
 A Rust backend for connected-vehicle telemetry, built as a portfolio project for Bytebeam’s Backend Engineer (SDE 1) role. It focuses on idempotent ingestion, typed failures, and clear operational boundaries.
 
-**Status:** M1 walking skeleton is complete. M2 telemetry ingestion is next.
+**Status:** M2 telemetry ingestion is implemented. DB-backed integration tests are included but require a Postgres `TEST_DATABASE_URL`.
 
 ## Current scope
 
 - **Implemented (M1):** env config, Postgres pool, SQL migrations, typed `ApiError` responses, request IDs, JSON tracing, `/health/live`, `/health/ready`, graceful shutdown.
+- **Implemented (M2):** `POST /v1/telemetry` with `X-Device-Key` auth, request validation, atomic batch insert, `batch_id` idempotency (`201` accepted / `200` duplicate), and conflict on cross-device batch reuse.
 - **MVP boundary:** one Rust binary + PostgreSQL. Redis, streams/outbox, alert workers, OTA, Prometheus, and Docker are deferred. See [`docs/MVP.md`](docs/MVP.md).
 
 ## API
@@ -15,7 +16,7 @@ A Rust backend for connected-vehicle telemetry, built as a portfolio project for
 |---|---|---|---|
 | `GET` | `/health/live` | Implemented | Liveness probe; no dependency checks |
 | `GET` | `/health/ready` | Implemented | Postgres check; `503` when degraded |
-| `POST` | `/v1/telemetry` | Planned (M2) | Idempotent batch ingest via `batch_id` |
+| `POST` | `/v1/telemetry` | Implemented | Device-key auth; idempotent batch ingest via `batch_id` |
 | `GET` | `/v1/devices` | Planned (M3) | List devices |
 | `GET` | `/v1/devices/{id}/readings` | Planned (M3) | Time-range query, cursor pagination |
 | `GET` | `/v1/devices/{id}/readings/latest` | Planned (M3) | Latest value per metric key |
@@ -57,7 +58,7 @@ scripts/      # check.sh
 | Milestone | Scope | Status |
 |---|---|---|
 | M1 | Skeleton, migrations, health, typed errors | Done |
-| M2 | Telemetry ingest, device auth, validation, `batch_id` dedupe | Next |
+| M2 | Telemetry ingest, device auth, validation, `batch_id` dedupe | Done (DB tests pending Postgres) |
 | M3 | Device and readings query APIs | Planned |
 | M4 | Integration tests, seed script, demo walkthrough | Planned |
 | M5 | Optional inline alerts | Planned |

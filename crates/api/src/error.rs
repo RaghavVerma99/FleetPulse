@@ -15,6 +15,8 @@ pub enum ApiError {
     Validation(String),
     #[error("service unavailable")]
     Unavailable,
+    #[error("conflict: {0}")]
+    Conflict(String),
     #[error("internal error: {0}")]
     Internal(#[from] anyhow::Error),
 }
@@ -26,6 +28,7 @@ impl ApiError {
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
             Self::Validation(_) => StatusCode::UNPROCESSABLE_ENTITY,
             Self::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
+            Self::Conflict(_) => StatusCode::CONFLICT,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -36,6 +39,7 @@ impl ApiError {
             Self::Unauthorized => "unauthorized",
             Self::Validation(_) => "validation_failed",
             Self::Unavailable => "service_unavailable",
+            Self::Conflict(_) => "conflict",
             Self::Internal(_) => "internal_error",
         }
     }

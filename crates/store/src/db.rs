@@ -12,6 +12,8 @@ pub enum DbError {
     Migrate(#[from] sqlx::migrate::MigrateError),
     #[error("database query failed: {0}")]
     Query(#[source] sqlx::Error),
+    #[error("conflicting write")]
+    Conflict,
 }
 
 /// Handle to the Postgres connection pool.

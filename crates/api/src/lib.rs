@@ -1,13 +1,15 @@
 //! HTTP surface for FleetPulse.
 //!
-//! M1 exposes liveness and readiness only; telemetry ingestion lands in M2.
+//! M1: health endpoints. M2: telemetry ingestion with device-key auth.
 
 #![forbid(unsafe_code)]
 
+pub mod auth;
 pub mod config;
 pub mod error;
 pub mod routes;
 pub mod state;
+pub mod telemetry;
 
 use axum::Router;
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};

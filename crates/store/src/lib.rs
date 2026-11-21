@@ -6,6 +6,10 @@
 
 #![forbid(unsafe_code)]
 
+mod auth;
 mod db;
+mod telemetry;
 
+pub use auth::device_id_for_api_key;
 pub use db::{Db, DbError};
+pub use telemetry::{ingest_batch, IngestOutcome, NewReading};
