@@ -1,5 +1,9 @@
 # Concepts Behind FleetPulse
 
+> **Scope:** this explains the target design, including components the MVP
+> defers (Redis, streams, outbox relay, OTA). `docs/MVP.md` defines what is
+> being built now.
+
 This explains the *why* of every component in plain terms, then the deeper
 mechanics. Read this to understand the system, not just its parts.
 

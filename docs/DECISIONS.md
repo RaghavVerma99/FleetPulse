@@ -94,3 +94,15 @@ operators use one API key from the environment. **Alternatives:** JWT + users
 table (more surface, no extra signal), no auth (not defensible).
 **Consequences:** device scoping is enforced properly; operator auth is coarse
 and explicitly marked as a v2 item (JWT + roles).
+
+## ADR-014: MVP is Postgres-only; Redis and Docker are deferred
+**Context:** The target design needs Redis for cache, rate limiting, and
+streams, plus Docker for local services. Both add operational surface before a
+single endpoint exists. **Decision:** build the MVP against one PostgreSQL
+database; defer Redis, the outbox relay, the alert worker, and Docker until the
+MVP demo is complete. **Alternatives:** build the full architecture up front
+(slow, unrewarding), swap Postgres for SQLite (loses the JD-relevant SQL and
+concurrency story). **Consequences:** fewer moving parts and a faster path to a
+demo; the deferred pieces are documented with reintroduction triggers in
+`docs/MVP.md`, so this is a deliberate cut rather than an omission.
+

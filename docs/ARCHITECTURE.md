@@ -1,5 +1,9 @@
 # Architecture
 
+> **Scope note:** this document describes the target design. The current MVP is
+> Postgres-only and deliberately defers Redis, streams/outbox, alerts, and OTA.
+> `docs/MVP.md` is authoritative for what is being built now.
+
 ## 1. System overview
 
 FleetPulse is a set of small Rust services (or one service with clear internal
