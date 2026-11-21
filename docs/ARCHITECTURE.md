@@ -3,6 +3,8 @@
 > **Scope note:** this document describes the target design. The current MVP is
 > Postgres-only and deliberately defers Redis, streams/outbox, alerts, and OTA.
 > `docs/MVP.md` is authoritative for what is being built now.
+>
+> **Implementation status (current):** M1/M2/M3 are implemented in code (health, ingest, device/operator auth, query APIs). DB-backed integration tests exist but were not executed in this environment because Postgres is not configured.
 
 ## 1. System overview
 
@@ -170,16 +172,23 @@ unique, `outbox (id) WHERE published_at IS NULL`.
 
 ## 6. API surface
 
+### Implemented now (MVP code)
+
+| Method | Path | Auth | Status |
+|---|---|---|---|
+| GET | `/health/live` | none | Implemented |
+| GET | `/health/ready` | none | Implemented (Postgres only in MVP) |
+| POST | `/v1/telemetry` | device key (`X-Device-Key`) | Implemented |
+| GET | `/v1/devices` | operator key (`X-Operator-Key`) | Implemented |
+| GET | `/v1/devices/{id}` | operator key | Implemented |
+| GET | `/v1/devices/{id}/readings` | operator key | Implemented |
+| GET | `/v1/devices/{id}/readings/latest` | operator key | Implemented |
+
+### Target / deferred
+
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| GET | `/health/live` | none | process alive |
-| GET | `/health/ready` | none | Postgres + Redis reachable |
 | GET | `/metrics` | none (internal) | Prometheus scrape |
-| POST | `/v1/telemetry` | device key | ingest a batch |
-| GET | `/v1/devices` | operator key | list devices |
-| GET | `/v1/devices/{id}` | operator key | device detail |
-| GET | `/v1/devices/{id}/readings` | operator key | time-range query, cursor paginated |
-| GET | `/v1/devices/{id}/readings/latest` | operator key | latest value per key |
 | POST | `/v1/devices/{id}/commands` | operator key | create command (`Idempotency-Key` header) |
 | GET | `/v1/devices/{id}/commands` | operator key | command history |
 | GET | `/v1/devices/me/commands?wait=30s` | device key | long-poll for next command |

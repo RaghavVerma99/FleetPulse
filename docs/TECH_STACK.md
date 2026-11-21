@@ -50,9 +50,7 @@
 | MQTT (`rumqttc`), `jsonwebtoken` | v2 |
 
 ## Integration notes
-- `validator` does not integrate with axum out of the box: implement a small
-  `ValidatedJson<T>` extractor that deserializes and returns `422` on failure.
+- `validator` is used on request DTOs; M2 currently validates in handlers and maps failures to `ApiError::Validation` (`422`). A reusable `ValidatedJson<T>` extractor can be added in M4.
 - sqlx's compile-time macros need a live database at build time. Commit the
   `.sqlx/` query cache and set `SQLX_OFFLINE=true` in CI and for fresh clones.
-- Pin exact dependency versions in `Cargo.lock` and record the resolved set in
-  this file once M1 wires the real dependencies.
+- Exact resolved versions are tracked in `Cargo.lock`; update this document when dependency policy changes (MSRV bumps, major upgrades, new crates).

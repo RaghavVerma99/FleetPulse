@@ -6,16 +6,22 @@ explicitly deferred.
 
 > Target design: `ARCHITECTURE.md`. This document wins where they disagree.
 
+## Current implementation status
+
+- **M1/M2/M3 implemented in code**: health, config, migrations, telemetry ingest, device/operator auth, device/readings query APIs.
+- **Verification status**: `scripts/check.sh` passes (fmt, clippy `-D warnings`, tests). DB-backed integration tests are present but `#[ignore]` without `TEST_DATABASE_URL`/`DATABASE_URL`.
+- **This environment**: Postgres is not configured, so ignored DB integration tests were not run here.
+
 ## The demo
 
-```
+```text
 1. Seed a device with an API key.
 2. POST /v1/telemetry with a batch of readings   -> 201, accepted: N
 3. Replay the same batch_id                      -> 200, duplicate ignored
-4. GET /v1/devices                               -> the device, last seen updated
-5. GET /v1/devices/{id}/readings?from=...&to=...  -> paginated readings
+4. GET /v1/devices                               -> device listed, last_seen updated
+5. GET /v1/devices/{id}/readings?from=...&to=... -> paginated readings
 6. GET /v1/devices/{id}/readings/latest          -> latest value per metric
-7. Stop Postgres                                  -> /health/ready returns 503
+7. Stop Postgres                                 -> /health/ready returns 503
 ```
 
 That is the whole MVP. It proves ingestion, idempotency, persistence, querying,
@@ -23,13 +29,13 @@ auth, and operational health — the core of the JD.
 
 ## In scope
 
-| Milestone | Deliverable |
-|---|---|
-| M1 Skeleton | Config, Postgres pool, `0001_init.sql`, tracing, typed `ApiError`, `/health/live`, `/health/ready`, graceful shutdown |
-| M2 Ingest | `POST /v1/telemetry`, device API-key auth, validation, one transaction, `batch_id` dedupe, `201`/`200` semantics |
-| M3 Query | Device list/detail, readings time-range with cursor pagination, latest-per-metric |
-| M4 Quality | Integration tests against a local test database, seed script, README with real curl examples |
-| M5 Optional | Inline threshold alerts on ingest + `GET /v1/alerts` |
+| Milestone | Deliverable | State |
+|---|---|---|
+| M1 Skeleton | Config, Postgres pool, `0001_init.sql`, tracing, typed `ApiError`, health endpoints, graceful shutdown | Done |
+| M2 Ingest | `POST /v1/telemetry`, device API-key auth, validation, one transaction, `batch_id` dedupe, `201`/`200`/`409` semantics | Done |
+| M3 Query | Device list/detail, readings time-range with cursor pagination, latest-per-metric | Done |
+| M4 Quality | DB-backed test run in CI/local Postgres, seed script with real hash, README demo with real responses | Planned |
+| M5 Optional | Inline threshold alerts on ingest + `GET /v1/alerts` | Planned |
 
 Schema in M1: `devices`, `api_keys`, `telemetry_batches`, `readings`.
 Index: `readings (device_id, ts DESC)`.
