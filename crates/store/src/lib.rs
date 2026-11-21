@@ -5,3 +5,7 @@
 //! directory (see ADR-012).
 
 #![forbid(unsafe_code)]
+
+mod db;
+
+pub use db::{Db, DbError};
