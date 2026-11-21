@@ -10,6 +10,7 @@ use fleetpulse_api::state::AppState;
 use fleetpulse_store::Db;
 use http_body_util::BodyExt;
 use serde_json::json;
+use serial_test::serial;
 use tower::ServiceExt;
 use uuid::Uuid;
 
@@ -19,7 +20,7 @@ fn db() -> Option<Db> {
         let url = std::env::var("TEST_DATABASE_URL")
             .or_else(|_| std::env::var("DATABASE_URL"))
             .ok()?;
-        Db::connect_lazy(&url, 5).ok()
+        Db::connect_lazy(&url, 10).ok()
     })
     .clone()
 }
@@ -85,6 +86,7 @@ async fn post_telemetry(db: &Db, device_key: &str, batch_id: Uuid, readings: ser
 }
 
 #[tokio::test]
+#[serial]
 #[ignore = "requires TEST_DATABASE_URL or DATABASE_URL"]
 async fn operator_can_list_and_get_device() {
     let db = migrated_db().await;
@@ -118,6 +120,7 @@ async fn operator_can_list_and_get_device() {
 }
 
 #[tokio::test]
+#[serial]
 #[ignore = "requires TEST_DATABASE_URL or DATABASE_URL"]
 async fn readings_query_supports_range_cursor_and_latest() {
     let db = migrated_db().await;

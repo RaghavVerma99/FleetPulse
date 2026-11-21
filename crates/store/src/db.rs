@@ -14,6 +14,8 @@ pub enum DbError {
     Query(#[source] sqlx::Error),
     #[error("conflicting write")]
     Conflict,
+    #[error("key hash failed: {0}")]
+    Hash(String),
 }
 
 /// Handle to the Postgres connection pool.

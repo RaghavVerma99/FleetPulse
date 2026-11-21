@@ -74,23 +74,36 @@ pub async fn ingest_batch(
         };
     }
 
+    let mut device_ids = Vec::with_capacity(readings.len());
+    let mut batch_ids = Vec::with_capacity(readings.len());
+    let mut tss = Vec::with_capacity(readings.len());
+    let mut keys = Vec::with_capacity(readings.len());
+    let mut values = Vec::with_capacity(readings.len());
+    let mut metadata = Vec::with_capacity(readings.len());
     for reading in readings {
-        sqlx::query(
-            r#"
-            insert into readings (device_id, batch_id, ts, key, value, metadata)
-            values ($1, $2, $3, $4, $5, $6)
-            "#,
-        )
-        .bind(device_id)
-        .bind(batch_id)
-        .bind(reading.ts)
-        .bind(&reading.key)
-        .bind(reading.value)
-        .bind(&reading.metadata)
-        .execute(&mut *tx)
-        .await
-        .map_err(DbError::Query)?;
+        device_ids.push(device_id);
+        batch_ids.push(batch_id);
+        tss.push(reading.ts);
+        keys.push(reading.key.clone());
+        values.push(reading.value);
+        metadata.push(reading.metadata.clone());
     }
+
+    sqlx::query(
+        r#"
+        insert into readings (device_id, batch_id, ts, key, value, metadata)
+        select * from unnest($1::uuid[], $2::uuid[], $3::timestamptz[], $4::text[], $5::float8[], $6::jsonb[])
+        "#,
+    )
+    .bind(&device_ids)
+    .bind(&batch_ids)
+    .bind(&tss)
+    .bind(&keys)
+    .bind(&values)
+    .bind(&metadata)
+    .execute(&mut *tx)
+    .await
+    .map_err(DbError::Query)?;
 
     sqlx::query(
         r#"

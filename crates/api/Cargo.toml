@@ -27,5 +27,6 @@ argon2 = { version = "0.5", features = ["std"] }
 http-body-util = "0.1"
 rand_core = { version = "0.6", features = ["getrandom"] }
 serde_json = "1"
+serial_test = "3"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono", "json", "migrate", "macros"] }
 tower = { version = "0.5", features = ["util"] }

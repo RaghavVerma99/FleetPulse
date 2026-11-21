@@ -10,6 +10,7 @@ use fleetpulse_api::state::AppState;
 use fleetpulse_store::Db;
 use http_body_util::BodyExt;
 use serde_json::json;
+use serial_test::serial;
 use tower::ServiceExt;
 use uuid::Uuid;
 
@@ -19,7 +20,7 @@ fn db() -> Option<Db> {
         let url = std::env::var("TEST_DATABASE_URL")
             .or_else(|_| std::env::var("DATABASE_URL"))
             .ok()?;
-        let db = Db::connect_lazy(&url, 5).ok()?;
+        let db = Db::connect_lazy(&url, 10).ok()?;
         Some(db)
     })
     .clone()
@@ -94,7 +95,8 @@ async fn post_batch(
         .await
         .expect("body")
         .to_bytes();
-    let json: serde_json::Value = serde_json::from_slice(&bytes).expect("json");
+    let json: serde_json::Value = serde_json::from_slice(&bytes)
+        .unwrap_or_else(|_| json!({"raw": String::from_utf8_lossy(&bytes).to_string()}));
     (status, json)
 }
 
@@ -109,6 +111,7 @@ fn sample_batch(batch_id: Uuid) -> serde_json::Value {
 }
 
 #[tokio::test]
+#[serial]
 #[ignore = "requires TEST_DATABASE_URL or DATABASE_URL"]
 async fn ingest_creates_then_dedupes_by_batch_id() {
     let db = migrated_db().await;
@@ -135,6 +138,7 @@ async fn ingest_creates_then_dedupes_by_batch_id() {
 }
 
 #[tokio::test]
+#[serial]
 #[ignore = "requires TEST_DATABASE_URL or DATABASE_URL"]
 async fn ingest_rejects_missing_or_bad_key() {
     let db = migrated_db().await;
@@ -157,6 +161,7 @@ async fn ingest_rejects_missing_or_bad_key() {
 }
 
 #[tokio::test]
+#[serial]
 #[ignore = "requires TEST_DATABASE_URL or DATABASE_URL"]
 async fn ingest_rejects_invalid_payloads() {
     let db = migrated_db().await;
@@ -185,6 +190,7 @@ async fn ingest_rejects_invalid_payloads() {
 }
 
 #[tokio::test]
+#[serial]
 #[ignore = "requires TEST_DATABASE_URL or DATABASE_URL"]
 async fn ingest_rejects_cross_device_batch_id_reuse() {
     let db = migrated_db().await;

@@ -1,7 +1,10 @@
 -- Seed data for local demo. Safe to re-run: uses fixed UUIDs and ON CONFLICT.
+--
 -- Device: dev-001 (00000000-0000-0000-0000-000000000001)
--- Raw device key (store only hash): fp_dev_demo_key_001
--- Replace the hash if you change the key; generate with argon2 in app/tests.
+-- Raw device key (DO NOT store in prod logs): 
+--   fp_00000000000000000000000000000101_3372f3f3d3804f3191361e0b5ad643fb
+-- The key embeds api_keys.id as `fp_<uuid-simple>_<secret>` so auth can do a
+-- direct indexed lookup instead of scanning all active keys.
 
 insert into devices (id, name, status, firmware_version, last_seen, created_at)
 values (
@@ -12,16 +15,18 @@ values (
   null,
   now()
 )
-on conflict (id) do update set name = excluded.name;
+on conflict (id) do update
+  set name = excluded.name,
+      firmware_version = excluded.firmware_version;
 
--- Argon2id hash for "fp_dev_demo_key_001" generated offline for demo only.
--- If auth fails, create a key via SQL with a freshly generated hash.
 insert into api_keys (id, device_id, key_hash, created_at, revoked_at)
 values (
   '00000000-0000-0000-0000-000000000101',
   '00000000-0000-0000-0000-000000000001',
-  '$argon2id$v=19$m=19456,t=2,p=1$Q0hBTkdFTUVTQUxU$4L5vXlL5T5Wl5q3QvYkQ8v6l9r6s8gq2Qf0f5o3jP5I',
+  '$argon2id$v=19$m=19456,t=2,p=1$fIodqlz3eoOIYC12Anm2Yw$xsros5IrZbKuEF9GwLk6CItKF/mKJ0IvB/JX7imm0A8',
   now(),
   null
 )
-on conflict (id) do nothing;
+on conflict (id) do update
+  set key_hash = excluded.key_hash,
+      revoked_at = null;
