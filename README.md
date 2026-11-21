@@ -15,13 +15,16 @@ and `docs/TECH_STACK.md` for the concrete libraries.
 
 ## Status
 
-**Phase 0 complete: repository and toolchain scaffold.** No service code yet.
+**Phase 0 complete: repository, toolchain, and CI scaffold.** No service code yet.
 
 Done:
-- Cargo workspace (`api`, `domain`, `store`), pinned stable toolchain, clippy +
-  rustfmt in CI.
-- Docker Compose for Postgres 16 and Redis 7 with healthchecks.
-- `.env.example`, `.gitignore`, GitHub Actions workflow.
+- Cargo workspace (`api`, `domain`, `store`), pinned stable toolchain.
+- Local build/test/clippy loop verified on Linux (WSL2 Ubuntu, Rust 1.100):
+  `fmt`, `clippy -D warnings`, and `cargo test` all pass.
+- Docker Compose for Postgres 16 and Redis 7 with healthchecks, committed but
+  not yet started on this machine.
+- `.env.example`, `.gitignore`, `.gitattributes`, `scripts/check.sh`.
+- GitHub Actions workflow mirroring `scripts/check.sh`.
 - Architecture corrections: API surface, transactional outbox, long-poll
   command delivery, idempotency keys, alert durations, migrations location.
 
@@ -30,26 +33,37 @@ typed errors, and `/health/live` + `/health/ready`.
 
 ## Quickstart (development environment)
 
-Prerequisites: Rust (stable, via rustup) and Docker Desktop.
+Prerequisites: Rust (stable, via rustup). Docker Desktop is needed from Phase 2
+onward for Postgres/Redis and testcontainers.
 
 ```bash
 cp .env.example .env          # adjust if your ports differ
-docker compose up -d          # Postgres + Redis
-docker compose ps             # both should report healthy
 cargo build                   # compiles the workspace
-cargo test                    # unit + integration tests
+./scripts/check.sh            # fmt + clippy + tests (same as CI)
+
+docker compose up -d          # Postgres + Redis (Phase 2 onward)
+docker compose ps             # both should report healthy
 ```
 
 The service itself starts in Phase 1 (`cargo run -p fleetpulse-api`).
 
 ### Windows notes
 
-- The default Rust toolchain is `x86_64-pc-windows-msvc`, which needs the MSVC
-  linker: install **Visual Studio Build Tools** with the *Desktop development
-  with C++* workload (`winget install Microsoft.VisualStudio.2022.BuildTools`).
-- Windows **Smart App Control** blocks unsigned toolchain binaries such as
-  `clippy-driver.exe` (`os error 4551`). Either disable Smart App Control, or
-  rely on CI for clippy — the workflow runs it on every push.
+Windows **Smart App Control** blocks unsigned binaries, including every locally
+compiled Rust test executable and `clippy-driver.exe` (`os error 4551`). The
+supported workaround used here is to build and test inside WSL2:
+
+```bash
+wsl -d Ubuntu -u dev -- bash -lc \
+  'cd /mnt/c/path/to/FleetPulse && \
+   export CARGO_TARGET_DIR=$HOME/target/fleetpulse && \
+   ./scripts/check.sh'
+```
+
+Keeping `CARGO_TARGET_DIR` in the Linux home avoids the slow `/mnt/c` filesystem.
+- If you prefer native Windows builds, install **Visual Studio Build Tools** with
+  the *Desktop development with C++* workload, and turn Smart App Control off
+  (one-way, cannot be re-enabled without reinstalling Windows).
 - Docker Desktop requires WSL2 on Windows 11; enable it before
   `docker compose up -d`.
 
