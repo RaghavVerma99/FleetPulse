@@ -9,8 +9,8 @@
 ## 1. System overview
 
 FleetPulse is a set of small Rust services (or one service with clear internal
-crates) that together form a connected-device backend. The design mirrors the
-product surface described in Bytebeam's JD: telemetry, remote diagnostics, OTA
+crates) that together form a connected-device backend. The design covers core
+connected-device product surfaces: telemetry, remote diagnostics, OTA
 updates, alerts, and fleet-scale device management.
 
 ## 2. The big picture

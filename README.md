@@ -2,7 +2,7 @@
 
 FleetPulse is a Rust backend for connected-vehicle telemetry. It ingests device batches, persists readings in PostgreSQL, and exposes operator query APIs with idempotent writes, typed errors, and operational health checks.
 
-Built as a portfolio project for the Bytebeam Backend Engineer (SDE 1) role.
+Built as a portfolio project demonstrating backend engineering for connected-device telemetry systems.
 
 ## Status
 

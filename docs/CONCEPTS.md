@@ -20,7 +20,7 @@ codes — to the cloud. The cloud must:
 - push commands back to the device (OTA updates, diagnostics requests),
 - raise alerts when something is wrong.
 
-That is exactly Bytebeam's product surface, and what FleetPulse simulates.
+That is the core connected-device product surface FleetPulse simulates.
 
 ## 2. HTTP APIs (how clients talk to the system)
 
