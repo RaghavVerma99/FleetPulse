@@ -8,7 +8,10 @@ use tower::ServiceExt;
 
 fn state(database_url: &str) -> AppState {
     let db = Db::connect_lazy(database_url, 1).expect("lazy pool accepts the URL");
-    AppState { db }
+    AppState {
+        db,
+        operator_api_key: "test-operator-key".to_owned(),
+    }
 }
 
 #[tokio::test]
@@ -61,10 +64,13 @@ async fn readiness_succeeds_when_postgres_is_up() {
         .expect("connect to postgres");
     db.migrate().await.expect("apply migrations");
 
-    let response = app(AppState { db })
-        .oneshot(Request::get("/health/ready").body(Body::empty()).unwrap())
-        .await
-        .expect("router responds");
+    let response = app(AppState {
+        db,
+        operator_api_key: "test-operator-key".to_owned(),
+    })
+    .oneshot(Request::get("/health/ready").body(Body::empty()).unwrap())
+    .await
+    .expect("router responds");
 
     assert_eq!(response.status(), StatusCode::OK);
 

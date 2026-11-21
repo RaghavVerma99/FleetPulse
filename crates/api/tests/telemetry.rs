@@ -25,6 +25,13 @@ fn db() -> Option<Db> {
     .clone()
 }
 
+fn app_state(db: Db) -> AppState {
+    AppState {
+        db,
+        operator_api_key: "test-operator-key".to_owned(),
+    }
+}
+
 async fn migrated_db() -> Db {
     let db =
         db().expect("set TEST_DATABASE_URL or DATABASE_URL to run telemetry integration tests");
@@ -109,12 +116,12 @@ async fn ingest_creates_then_dedupes_by_batch_id() {
     let batch_id = Uuid::new_v4();
     let body = sample_batch(batch_id);
 
-    let (status, json) = post_batch(app(AppState { db: db.clone() }), &api_key, body.clone()).await;
+    let (status, json) = post_batch(app(app_state(db.clone())), &api_key, body.clone()).await;
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(json["status"], "accepted");
     assert_eq!(json["accepted"], 2);
 
-    let (status, json) = post_batch(app(AppState { db: db.clone() }), &api_key, body).await;
+    let (status, json) = post_batch(app(app_state(db.clone())), &api_key, body).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(json["status"], "duplicate");
     assert_eq!(json["accepted"], 2);
@@ -133,7 +140,7 @@ async fn ingest_rejects_missing_or_bad_key() {
     let db = migrated_db().await;
     let body = sample_batch(Uuid::new_v4());
 
-    let response = app(AppState { db: db.clone() })
+    let response = app(app_state(db.clone()))
         .oneshot(
             Request::post("/v1/telemetry")
                 .header("content-type", "application/json")
@@ -144,7 +151,7 @@ async fn ingest_rejects_missing_or_bad_key() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 
-    let (status, json) = post_batch(app(AppState { db }), "fp_bad_key", body).await;
+    let (status, json) = post_batch(app(app_state(db)), "fp_bad_key", body).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert_eq!(json["error"]["code"], "unauthorized");
 }
@@ -160,7 +167,7 @@ async fn ingest_rejects_invalid_payloads() {
         "batch_id": Uuid::new_v4(),
         "readings": [{ "ts": future.to_rfc3339(), "key": "temp", "value": 1.0 }]
     });
-    let (status, json) = post_batch(app(AppState { db: db.clone() }), &api_key, bad).await;
+    let (status, json) = post_batch(app(app_state(db.clone())), &api_key, bad).await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(json["error"]["code"], "validation_failed");
 
@@ -169,11 +176,11 @@ async fn ingest_rejects_invalid_payloads() {
         "readings": [{ "ts": Utc::now().to_rfc3339(), "key": "temp", "value": null }]
     });
     // null is a deserialization/type error - axum returns 400/422 depending; accept either as client error
-    let (status, _) = post_batch(app(AppState { db: db.clone() }), &api_key, nan).await;
+    let (status, _) = post_batch(app(app_state(db.clone())), &api_key, nan).await;
     assert!(status.is_client_error());
 
     let empty = json!({ "batch_id": Uuid::new_v4(), "readings": [] });
-    let (status, _) = post_batch(app(AppState { db }), &api_key, empty).await;
+    let (status, _) = post_batch(app(app_state(db)), &api_key, empty).await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 }
 
@@ -186,10 +193,10 @@ async fn ingest_rejects_cross_device_batch_id_reuse() {
     let batch_id = Uuid::new_v4();
     let body = sample_batch(batch_id);
 
-    let (status, _) = post_batch(app(AppState { db: db.clone() }), &key1, body.clone()).await;
+    let (status, _) = post_batch(app(app_state(db.clone())), &key1, body.clone()).await;
     assert_eq!(status, StatusCode::CREATED);
 
-    let (status, json) = post_batch(app(AppState { db }), &key2, body).await;
+    let (status, json) = post_batch(app(app_state(db)), &key2, body).await;
     assert_eq!(status, StatusCode::CONFLICT);
     assert_eq!(json["error"]["code"], "conflict");
 }

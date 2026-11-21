@@ -2,13 +2,14 @@
 
 A Rust backend for connected-vehicle telemetry, built as a portfolio project for Bytebeam’s Backend Engineer (SDE 1) role. It focuses on idempotent ingestion, typed failures, and clear operational boundaries.
 
-**Status:** M2 telemetry ingestion is implemented. DB-backed integration tests are included but require a Postgres `TEST_DATABASE_URL`.
+**Status:** M3 query APIs implemented. DB-backed integration tests are present but require `TEST_DATABASE_URL` (Postgres not configured on this machine).
 
 ## Current scope
 
-- **Implemented (M1):** env config, Postgres pool, SQL migrations, typed `ApiError` responses, request IDs, JSON tracing, `/health/live`, `/health/ready`, graceful shutdown.
-- **Implemented (M2):** `POST /v1/telemetry` with `X-Device-Key` auth, request validation, atomic batch insert, `batch_id` idempotency (`201` accepted / `200` duplicate), and conflict on cross-device batch reuse.
-- **MVP boundary:** one Rust binary + PostgreSQL. Redis, streams/outbox, alert workers, OTA, Prometheus, and Docker are deferred. See [`docs/MVP.md`](docs/MVP.md).
+- **Implemented (M1):** config, Postgres pool, migrations, typed `ApiError` responses, request IDs, JSON tracing, health endpoints, graceful shutdown.
+- **Implemented (M2):** `POST /v1/telemetry` with `X-Device-Key` auth, validation, atomic batch insert, `batch_id` idempotency (`201`/`200`), cross-device batch conflict (`409`).
+- **Implemented (M3):** operator-authenticated device/readings queries: list/get device, readings time-range with cursor pagination, latest-per-metric.
+- **MVP boundary:** one Rust binary + PostgreSQL. Redis, streams/outbox, alert worker, OTA, Prometheus, Docker/testcontainers are deferred. See [`docs/MVP.md`](docs/MVP.md).
 
 ## API
 
@@ -16,10 +17,11 @@ A Rust backend for connected-vehicle telemetry, built as a portfolio project for
 |---|---|---|---|
 | `GET` | `/health/live` | Implemented | Liveness probe; no dependency checks |
 | `GET` | `/health/ready` | Implemented | Postgres check; `503` when degraded |
-| `POST` | `/v1/telemetry` | Implemented | Device-key auth; idempotent batch ingest via `batch_id` |
-| `GET` | `/v1/devices` | Planned (M3) | List devices |
-| `GET` | `/v1/devices/{id}/readings` | Planned (M3) | Time-range query, cursor pagination |
-| `GET` | `/v1/devices/{id}/readings/latest` | Planned (M3) | Latest value per metric key |
+| `POST` | `/v1/telemetry` | Implemented | `X-Device-Key`; idempotent batch ingest via `batch_id` |
+| `GET` | `/v1/devices` | Implemented | `X-Operator-Key`; list devices |
+| `GET` | `/v1/devices/{id}` | Implemented | `X-Operator-Key`; device detail |
+| `GET` | `/v1/devices/{id}/readings` | Implemented | `X-Operator-Key`; `from,to,limit,before` cursor pagination |
+| `GET` | `/v1/devices/{id}/readings/latest` | Implemented | `X-Operator-Key`; latest value per metric key |
 
 ## Quickstart
 
@@ -59,7 +61,7 @@ scripts/      # check.sh
 |---|---|---|
 | M1 | Skeleton, migrations, health, typed errors | Done |
 | M2 | Telemetry ingest, device auth, validation, `batch_id` dedupe | Done (DB tests pending Postgres) |
-| M3 | Device and readings query APIs | Planned |
+| M3 | Device and readings query APIs | Done (DB tests pending Postgres) |
 | M4 | Integration tests, seed script, demo walkthrough | Planned |
 | M5 | Optional inline alerts | Planned |
 

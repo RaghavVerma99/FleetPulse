@@ -36,3 +36,32 @@ impl FromRequestParts<AppState> for DeviceAuth {
         Ok(Self { device_id })
     }
 }
+
+/// Operator identity extracted from `X-Operator-Key`.
+///
+/// MVP uses a static key from config (ADR-013). This still exercises the auth
+/// boundary and keeps operator routes separate from device routes.
+#[derive(Debug, Clone, Copy)]
+pub struct OperatorAuth;
+
+impl FromRequestParts<AppState> for OperatorAuth {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let presented_key = parts
+            .headers
+            .get("x-operator-key")
+            .ok_or(ApiError::Unauthorized)?
+            .to_str()
+            .map_err(|_| ApiError::Unauthorized)?;
+
+        if presented_key != state.operator_api_key {
+            return Err(ApiError::Unauthorized);
+        }
+
+        Ok(Self)
+    }
+}

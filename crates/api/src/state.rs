@@ -4,4 +4,5 @@ use fleetpulse_store::Db;
 #[derive(Debug, Clone)]
 pub struct AppState {
     pub db: Db,
+    pub operator_api_key: String,
 }

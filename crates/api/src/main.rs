@@ -24,10 +24,16 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!(addr = %config.bind_addr, "fleetpulse api listening");
 
-    axum::serve(listener, app(AppState { db }))
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .context("server failed")?;
+    axum::serve(
+        listener,
+        app(AppState {
+            db,
+            operator_api_key: config.operator_api_key,
+        }),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await
+    .context("server failed")?;
 
     Ok(())
 }
