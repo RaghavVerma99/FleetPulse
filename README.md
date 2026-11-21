@@ -11,10 +11,10 @@ Built as a portfolio project for the Bytebeam Backend Engineer (SDE 1) role.
 | M1 Skeleton | Complete | Config, migrations, DB pool, tracing, health, graceful shutdown |
 | M2 Telemetry ingest | Complete | Device auth, validation, atomic batch insert, `batch_id` dedupe |
 | M3 Query APIs | Complete | Device list/detail, readings range + cursor, latest-per-metric |
-| M4 Quality | Planned | Seed/demo polish, DB-backed CI run, reproducible walkthrough |
+| M4 Quality | In progress | Seed key fixed, DB-backed tests hardened/verified locally, bottlenecks addressed |
 | M5 Alerts | Optional | Inline threshold evaluation |
 
-> DB-backed integration tests exist but are `#[ignore]` without `TEST_DATABASE_URL` / `DATABASE_URL`. On this machine, Postgres is not configured; `scripts/check.sh` passes for fmt/clippy/unit/router tests.
+> `scripts/check.sh` passes. DB-backed integration tests are `#[ignore]` and run with `TEST_DATABASE_URL`; they are serialized with `serial_test` because they share a database.
 
 ## System design
 
@@ -41,7 +41,7 @@ PostgreSQL (source of truth)
 |---|---|---|
 | Idempotent ingest | Client-supplied `batch_id`; `INSERT ... ON CONFLICT (id) DO NOTHING` | Safe retries over unreliable device networks |
 | Atomicity | Batch row + readings + device `last_seen` in one DB transaction | No partial batch state |
-| Auth | `X-Device-Key` verified against Argon2id hashes in `api_keys`; `X-Operator-Key` static env key | Separates device and operator trust boundaries (ADR-013) |
+| Auth | `X-Device-Key` uses `fp_<key_id>_<secret>` format for direct `api_keys` PK lookup + Argon2id verify; legacy keys fall back to scan; `X-Operator-Key` static env key | Avoids O(n) Argon2 verifies on hot path while keeping hash-at-rest (ADR-013) |
 | Validation | `validator` + manual checks (finite value, future skew, metadata object, key length) | Reject bad telemetry at boundary |
 | Errors | `ApiError` enum -> HTTP status + stable machine code; internal details logged only | Predictable clients, safe logs |
 | Observability | `tracing` JSON logs, request-id propagation, `/health/live`, `/health/ready` | Debuggable and deployable skeleton |
@@ -108,7 +108,7 @@ Readings response:
 | Table | Purpose | Key constraints/indexes |
 |---|---|---|
 | `devices` | Device identity and lifecycle | `status` CHECK, `last_seen` updated on ingest |
-| `api_keys` | Hashed device credentials | `key_hash`, `revoked_at`; active-key lookup by hash |
+| `api_keys` | Hashed device credentials | `key_hash`, `revoked_at`; prefixed key embeds `id` for direct lookup; hash verified in Rust |
 | `telemetry_batches` | Ingest idempotency gate | PK `id` (client-supplied UUID), `reading_count > 0` |
 | `readings` | Time-series samples | `readings(device_id, ts desc)` for range/latest queries |
 
@@ -172,15 +172,17 @@ export TEST_DATABASE_URL=postgres://fleetpulse:fleetpulse@localhost:5432/fleetpu
 cargo test -p fleetpulse-api -- --ignored
 ```
 
+DB-backed integration tests share a database and are marked `#[serial]` to avoid pool exhaustion/flakes.
+
 ## Known gaps / tradeoffs
 
 | Gap | Impact | Next step |
 |---|---|---|
-| No Postgres in this environment | Ignored DB integration tests not executed here | Run against local/CI Postgres |
-| Device-key auth scans active keys | O(n) Argon2 verifies per request | Add key prefix/id lookup or cached verifier |
+| Argon2 verification is CPU-bound | Correct for security, but auth cost is non-trivial under load | Add rate limiting; consider key-cache only with careful rotation/revocation semantics |
 | No rate limiting / abuse protection | MVP only | Add tower-governor/Redis limiter before exposure |
+| DB-backed tests require external Postgres | Not isolated in CI/local by default | Add CI Postgres service or testcontainers; keep serial/shared-DB constraints explicit |
 | No metrics/benchmarks yet | Performance not quantified | Add Criterion ingest bench + Prometheus `/metrics` |
-| Seed script hash placeholder | `scripts/seed.sql` needs real Argon2 hash | Regenerate from a known raw key before demo |
+| Seed contains a demo key/hash | Fine for local demo; unsafe to reuse outside dev | Generate per-environment keys; never commit real secrets |
 
 ## Deferred (intentional)
 
