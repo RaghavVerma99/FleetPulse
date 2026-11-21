@@ -1,0 +1,9 @@
+[package]
+name = "fleetpulse-store"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Postgres and Redis persistence layer."
+
+[dependencies]

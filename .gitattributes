@@ -1,0 +1,13 @@
+# Normalize line endings so Windows checkouts match CI and containers.
+* text=auto eol=lf
+
+*.rs   text eol=lf
+*.toml text eol=lf
+*.md   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.sql  text eol=lf
+*.sh   text eol=lf
+
+*.png binary
+*.jpg binary

@@ -1,0 +1,17 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/api",
+    "crates/domain",
+    "crates/store",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+publish = false
+
+# Internal crate paths are added to [workspace.dependencies] in Phase 1, when
+# there are real imports. Listing them now only produces unused-dependency
+# warnings.
