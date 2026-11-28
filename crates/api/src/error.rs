@@ -54,6 +54,19 @@ impl ApiError {
     }
 }
 
+/// Map a persistence error to a client-safe API error. Corrupt stored data is
+/// an internal inconsistency (500); everything else is a dependency failure
+/// (503) and is logged with its details.
+pub fn from_db(error: fleetpulse_store::DbError) -> ApiError {
+    tracing::error!(%error, "database query failed");
+    match error {
+        fleetpulse_store::DbError::InvalidData(_) => {
+            ApiError::Internal(anyhow::anyhow!("invalid data returned from database"))
+        }
+        _ => ApiError::Unavailable,
+    }
+}
+
 #[derive(Debug, Serialize)]
 struct ErrorEnvelope {
     error: ErrorDetail,

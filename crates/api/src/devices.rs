@@ -7,11 +7,9 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use crate::auth::OperatorAuth;
-use crate::error::ApiError;
+use crate::error::{from_db, ApiError};
+use crate::pagination::{parse_before, validate_limit, DEFAULT_LIMIT};
 use crate::state::AppState;
-
-const DEFAULT_LIMIT: i64 = 50;
-const MAX_LIMIT: i64 = 200;
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -129,13 +127,7 @@ async fn list_devices(
     _auth: OperatorAuth,
     Query(params): Query<DevicesParams>,
 ) -> Result<Json<DevicesResponse>, ApiError> {
-    let limit = params.limit.unwrap_or(DEFAULT_LIMIT);
-    if !(1..=MAX_LIMIT).contains(&limit) {
-        return Err(ApiError::Validation(format!(
-            "limit must be between 1 and {MAX_LIMIT}"
-        )));
-    }
-
+    let limit = validate_limit(params.limit.unwrap_or(DEFAULT_LIMIT))?;
     let (before_ts, before_id) = parse_before(params.before.as_deref())?;
     let mut devices = fleetpulse_store::list_devices(
         state.db.pool(),
@@ -146,7 +138,7 @@ async fn list_devices(
         },
     )
     .await
-    .map_err(db_err)?;
+    .map_err(from_db)?;
 
     let next_before = if devices.len() as i64 > limit {
         devices.truncate(limit as usize);
@@ -170,7 +162,7 @@ async fn get_device(
 ) -> Result<Json<DeviceResponse>, ApiError> {
     let device = fleetpulse_store::get_device(state.db.pool(), device_id)
         .await
-        .map_err(db_err)?
+        .map_err(from_db)?
         .ok_or(ApiError::NotFound)?;
     Ok(Json(device.into()))
 }
@@ -183,12 +175,7 @@ async fn list_readings(
 ) -> Result<Json<ReadingsResponse>, ApiError> {
     ensure_device_exists(&state, device_id).await?;
 
-    let limit = params.limit.unwrap_or(DEFAULT_LIMIT);
-    if !(1..=MAX_LIMIT).contains(&limit) {
-        return Err(ApiError::Validation(format!(
-            "limit must be between 1 and {MAX_LIMIT}"
-        )));
-    }
+    let limit = validate_limit(params.limit.unwrap_or(DEFAULT_LIMIT))?;
     if let (Some(from), Some(to)) = (params.from, params.to) {
         if from > to {
             return Err(ApiError::Validation("from must be <= to".to_owned()));
@@ -209,7 +196,7 @@ async fn list_readings(
         },
     )
     .await
-    .map_err(db_err)?;
+    .map_err(from_db)?;
 
     let next_before = if items.len() as i64 > limit {
         items.truncate(limit as usize);
@@ -234,14 +221,14 @@ async fn latest_readings(
     ensure_device_exists(&state, device_id).await?;
     let items = fleetpulse_store::latest_readings(state.db.pool(), device_id)
         .await
-        .map_err(db_err)?;
+        .map_err(from_db)?;
     Ok(Json(items.into_iter().map(Into::into).collect()))
 }
 
 async fn ensure_device_exists(state: &AppState, device_id: Uuid) -> Result<(), ApiError> {
     let exists = fleetpulse_store::get_device(state.db.pool(), device_id)
         .await
-        .map_err(db_err)?
+        .map_err(from_db)?
         .is_some();
     if exists {
         Ok(())
@@ -250,52 +237,9 @@ async fn ensure_device_exists(state: &AppState, device_id: Uuid) -> Result<(), A
     }
 }
 
-fn parse_before(before: Option<&str>) -> Result<(Option<DateTime<Utc>>, Option<Uuid>), ApiError> {
-    let Some(before) = before else {
-        return Ok((None, None));
-    };
-    let (ts_raw, id_raw) = before.split_once('|').ok_or_else(|| {
-        ApiError::Validation("before must be formatted as <rfc3339>|<uuid>".to_owned())
-    })?;
-    let ts = DateTime::parse_from_rfc3339(ts_raw)
-        .map_err(|_| ApiError::Validation("before timestamp must be RFC3339".to_owned()))?
-        .with_timezone(&Utc);
-    let id = Uuid::parse_str(id_raw)
-        .map_err(|_| ApiError::Validation("before id must be a UUID".to_owned()))?;
-    Ok((Some(ts), Some(id)))
-}
-
-fn db_err(error: fleetpulse_store::DbError) -> ApiError {
-    tracing::error!(%error, "database query failed");
-    match error {
-        // A value the DB constraint should have prevented is an internal
-        // inconsistency, not a transient dependency failure.
-        fleetpulse_store::DbError::InvalidData(_) => {
-            ApiError::Internal(anyhow::anyhow!("invalid data returned from database"))
-        }
-        _ => ApiError::Unavailable,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn parses_cursor() {
-        let id = Uuid::new_v4();
-        let ts = Utc::now();
-        let raw = format!("{}|{}", ts.to_rfc3339(), id);
-        let (parsed_ts, parsed_id) = parse_before(Some(&raw)).expect("parse");
-        assert_eq!(parsed_id, Some(id));
-        assert_eq!(parsed_ts.unwrap().timestamp(), ts.timestamp());
-    }
-
-    #[test]
-    fn rejects_bad_cursor() {
-        let err = parse_before(Some("nope")).unwrap_err();
-        assert_eq!(err.code(), "validation_failed");
-    }
 
     #[test]
     fn device_status_serializes_as_snake_case() {
