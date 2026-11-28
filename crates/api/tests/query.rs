@@ -98,7 +98,7 @@ async fn operator_can_list_and_get_device() {
         .unwrap();
     let (status, json) = send(app(app_state(db.clone())), req).await;
     assert_eq!(status, StatusCode::OK);
-    assert!(json
+    assert!(json["items"]
         .as_array()
         .unwrap()
         .iter()
@@ -171,6 +171,36 @@ async fn readings_query_supports_range_cursor_and_latest() {
     let arr = json.as_array().unwrap();
     assert!(arr.iter().any(|r| r["key"] == "temp"));
     assert!(arr.iter().any(|r| r["key"] == "speed"));
+}
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires TEST_DATABASE_URL or DATABASE_URL"]
+async fn devices_list_is_cursor_paginated() {
+    let db = migrated_db().await;
+    let (_first, _) = seed_device(&db).await;
+    let (_second, _) = seed_device(&db).await;
+
+    let req = Request::get("/v1/devices?limit=1")
+        .header("x-operator-key", "test-operator-key")
+        .body(Body::empty())
+        .unwrap();
+    let (status, json) = send(app(app_state(db.clone())), req).await;
+    assert_eq!(status, StatusCode::OK);
+    let items = json["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1);
+    let first_id = items[0]["id"].as_str().unwrap().to_owned();
+    let next = json["next_before"].as_str().expect("cursor").to_owned();
+
+    let req = Request::get(format!("/v1/devices?limit=1&before={}", urlencoding(&next)))
+        .header("x-operator-key", "test-operator-key")
+        .body(Body::empty())
+        .unwrap();
+    let (status, json) = send(app(app_state(db)), req).await;
+    assert_eq!(status, StatusCode::OK);
+    let items = json["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1);
+    assert_ne!(items[0]["id"].as_str().unwrap(), first_id);
 }
 
 fn urlencoding(s: &str) -> String {

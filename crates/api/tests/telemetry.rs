@@ -206,3 +206,34 @@ async fn ingest_rejects_cross_device_batch_id_reuse() {
     assert_eq!(status, StatusCode::CONFLICT);
     assert_eq!(json["error"]["code"], "conflict");
 }
+
+/// Kept in sync with the raw key documented in `scripts/seed.sql`.
+const SEED_DEVICE_KEY: &str =
+    "fp_00000000000000000000000000000101_3372f3f3d3804f3191361e0b5ad643fb";
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires TEST_DATABASE_URL or DATABASE_URL"]
+async fn seed_key_authenticates_and_batch_is_idempotent() {
+    let db = migrated_db().await;
+    sqlx::raw_sql(include_str!("../../../scripts/seed.sql"))
+        .execute(db.pool())
+        .await
+        .expect("apply scripts/seed.sql");
+
+    let batch_id = Uuid::new_v4();
+    let (status, json) = post_batch(
+        app(app_state(db.clone())),
+        SEED_DEVICE_KEY,
+        sample_batch(batch_id),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(json["status"], "accepted");
+    assert_eq!(json["accepted"], 2);
+
+    let (status, json) =
+        post_batch(app(app_state(db)), SEED_DEVICE_KEY, sample_batch(batch_id)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(json["status"], "duplicate");
+}
