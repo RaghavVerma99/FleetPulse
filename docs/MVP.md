@@ -9,8 +9,8 @@ explicitly deferred.
 ## Current implementation status
 
 - **M1/M2/M3 implemented in code**: health, config, migrations, telemetry ingest, device/operator auth, device/readings query APIs.
-- **Verification status**: `scripts/check.sh` passes (fmt, clippy `-D warnings`, tests). DB-backed integration tests are present but `#[ignore]` without `TEST_DATABASE_URL`/`DATABASE_URL`.
-- **This environment**: Postgres is not configured, so ignored DB integration tests were not run here.
+- **Verification status**: `scripts/check.sh` runs fmt, clippy `-D warnings`, and DB-free tests. CI additionally runs `cargo test --workspace -- --ignored` against a Postgres service; locally use `TEST_DATABASE_URL=... bash scripts/check-db.sh`.
+- **This environment**: no MSVC linker, WSL, or Postgres is available, so compilation and DB-backed tests could not be run locally. CI is the verification path.
 
 ## The demo
 
@@ -34,7 +34,7 @@ auth, and operational health — the core of the JD.
 | M1 Skeleton | Config, Postgres pool, `0001_init.sql`, tracing, typed `ApiError`, health endpoints, graceful shutdown | Done |
 | M2 Ingest | `POST /v1/telemetry`, device API-key auth, validation, one transaction, `batch_id` dedupe, `201`/`200`/`409` semantics | Done |
 | M3 Query | Device list/detail, readings time-range with cursor pagination, latest-per-metric | Done |
-| M4 Quality | DB-backed test run in CI/local Postgres, seed script with real hash, README demo with real responses | Planned |
+| M4 Quality | DB-backed test run in CI/local Postgres, seed script with a verified hash, README demo commands, typed error envelope | In progress (CI wired) |
 | M5 Optional | Inline threshold alerts on ingest + `GET /v1/alerts` | Planned |
 
 Schema in M1: `devices`, `api_keys`, `telemetry_batches`, `readings`.

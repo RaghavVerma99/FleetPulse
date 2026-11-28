@@ -4,7 +4,7 @@
 > Postgres-only and deliberately defers Redis, streams/outbox, alerts, and OTA.
 > `docs/MVP.md` is authoritative for what is being built now.
 >
-> **Implementation status (current):** M1/M2/M3 are implemented in code (health, ingest, device/operator auth, query APIs). DB-backed integration tests exist but were not executed in this environment because Postgres is not configured.
+> **Implementation status (current):** M1/M2/M3 are implemented in code (health, ingest, device/operator auth, query APIs). DB-backed integration tests are wired into CI with a Postgres service; locally they are opt-in via `scripts/check-db.sh`. This environment has no linker, WSL, or Postgres, so CI is the verification path.
 
 ## 1. System overview
 
