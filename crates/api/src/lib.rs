@@ -4,11 +4,13 @@
 
 #![forbid(unsafe_code)]
 
+pub mod alerts;
 pub mod auth;
 pub mod config;
 pub mod devices;
 pub mod error;
 pub mod extract;
+pub mod pagination;
 pub mod routes;
 pub mod state;
 pub mod telemetry;

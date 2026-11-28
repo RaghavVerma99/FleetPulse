@@ -7,6 +7,7 @@ use axum::routing::get;
 use axum::{Json, Router};
 use serde::Serialize;
 
+use crate::alerts;
 use crate::devices;
 use crate::state::AppState;
 use crate::telemetry;
@@ -19,6 +20,7 @@ pub fn router(state: AppState) -> Router {
         .route("/health/ready", get(ready))
         .merge(telemetry::router())
         .merge(devices::router())
+        .merge(alerts::router())
         .with_state(state)
 }
 
