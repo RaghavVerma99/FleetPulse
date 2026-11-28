@@ -8,9 +8,6 @@
 !.env.example
 *.pem
 
-# SQLx offline query cache is committed on purpose (see docs/TECH_STACK.md)
-# Do not ignore .sqlx/.
-
 # Tooling and editors
 .idea/
 .vscode/
