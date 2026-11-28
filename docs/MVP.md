@@ -21,11 +21,13 @@ explicitly deferred.
 4. GET /v1/devices                               -> device listed, last_seen updated
 5. GET /v1/devices/{id}/readings?from=...&to=... -> paginated readings
 6. GET /v1/devices/{id}/readings/latest          -> latest value per metric
-7. Stop Postgres                                 -> /health/ready returns 503
+7. Insert a threshold rule (SQL), ingest a crossing reading -> alert created
+8. GET /v1/alerts?device_id={id}                 -> fired alerts, cursor-paginated
+9. Stop Postgres                                 -> /health/ready returns 503
 ```
 
 That is the whole MVP. It proves ingestion, idempotency, persistence, querying,
-auth, and operational health — the core of the JD.
+auth, alerts, and operational health — the core of the JD.
 
 ## In scope
 
@@ -35,33 +37,40 @@ auth, and operational health — the core of the JD.
 | M2 Ingest | `POST /v1/telemetry`, device API-key auth, validation, one transaction, `batch_id` dedupe, `201`/`200`/`409` semantics | Done |
 | M3 Query | Device list/detail, readings time-range with cursor pagination, latest-per-metric | Done |
 | M4 Quality | DB-backed test run in CI/local Postgres, seed script with a verified hash, README demo commands, typed error envelope | In progress (CI found a test-key format bug; fix committed, awaiting green re-run) |
-| M5 Alerts | Inline threshold alerts on ingest + `GET /v1/alerts` | **Next** |
+| M5 Alerts | Inline threshold alerts on ingest + `GET /v1/alerts` | Code complete (awaiting CI) |
 
 Schema in M1: `devices`, `api_keys`, `telemetry_batches`, `readings`.
 Index: `readings (device_id, ts DESC)`.
 M4 adds `0002_indexes.sql` for latest-per-metric, cascade, and cursor queries.
 
-## Next: M5 inline alerts
+## M5 inline alerts (implemented)
 
-Scope for the next slice (see ADR-015):
+Delivered in this slice (see ADR-015):
 
 1. Migration `0003_alerts.sql`: `alert_rules` and `alerts` tables plus indexes
    for `(device_id, triggered_at DESC)` and enabled rules per device.
 2. Ingest-time evaluation inside the existing batch transaction: for each
    enabled rule matching a metric key in the batch, compare the newest value and
    insert an alert when the threshold is crossed and the cooldown has elapsed.
+   A duplicate batch returns early, so retries never fire duplicate alerts.
 3. Operator endpoint `GET /v1/alerts` with `device_id`, `limit`, and `before`
    cursor; response uses `{items, next_before}` like the other list endpoints.
-4. Tests: rule fires, cooldown suppresses a second fire, non-matching metric does
-   not fire, and the query is filtered/paginated correctly.
+4. Tests: rule fires, cooldown suppresses a second fire, non-matching metric and
+   device do not fire, and the query is filtered/paginated correctly.
 
 Non-goals for M5: background worker, Redis/outbox, rule CRUD endpoints, and a
 "condition must hold for N seconds" window. Add those only if inline evaluation
 proves insufficient (see the reintroduction trigger in the table below).
 
-Definition of done: the seven-step demo still passes, the new alert demo step
-is documented with real responses, and `cargo test --workspace -- --ignored` is
-green in CI.
+Definition of done: the nine-step demo passes, the alert commands are documented
+in the README, and `cargo test --workspace -- --ignored` is green in CI.
+
+### Next after M5
+
+Device provisioning (`POST /v1/devices` + one-time key issuance) removes the
+last SQL step from the demo; rate limiting should land before external exposure.
+Prometheus metrics, Criterion benches, and a background alert worker stay behind
+the reintroduction triggers below.
 
 ## Hold off (do not build yet)
 

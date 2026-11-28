@@ -119,8 +119,8 @@ concurrency story). **Consequences:** fewer moving parts and a faster path to a
 demo; the deferred pieces are documented with reintroduction triggers in
 `docs/MVP.md`, so this is a deliberate cut rather than an omission.
 
-## ADR-015: Inline threshold evaluation on ingest (proposed for M5)
-**Status: proposed — M5 is the next slice; nothing is implemented yet.**
+## ADR-015: Inline threshold evaluation on ingest (M5)
+**Status: implemented in code; awaiting CI verification.**
 **Context:** Alerts are the last core product surface missing from the MVP.
 The target design (ADR-010) evaluates telemetry from a stream in a background
 worker, but there is no worker or Redis in the Postgres-only MVP. Adding one

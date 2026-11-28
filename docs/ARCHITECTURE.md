@@ -4,7 +4,7 @@
 > Postgres-only and deliberately defers Redis, streams/outbox, alerts, and OTA.
 > `docs/MVP.md` is authoritative for what is being built now.
 >
-> **Implementation status (current):** M1/M2/M3 are implemented in code (health, ingest, device/operator auth, query APIs). DB-backed integration tests are wired into CI with a Postgres service; locally they are opt-in via `scripts/check-db.sh`. The first CI run caught a test-key format regression, now fixed, and is awaiting a green re-run. **Next:** M5 inline threshold alerts (ADR-015). This environment has no linker, WSL, or Postgres, so CI is the verification path.
+> **Implementation status (current):** M1/M2/M3 and M5 are implemented in code (health, ingest, device/operator auth, query APIs, inline threshold alerts — ADR-015). DB-backed integration tests are wired into CI with a Postgres service; locally they are opt-in via `scripts/check-db.sh`. The first CI run caught a test-key format regression, now fixed, and a re-run is pending. Next up: device provisioning and rate limiting. This environment has no linker, WSL, or Postgres, so CI is the verification path.
 
 ## 1. System overview
 
@@ -183,16 +183,10 @@ unique, `outbox (id) WHERE published_at IS NULL`.
 | GET | `/v1/devices/{id}` | operator key | Implemented |
 | GET | `/v1/devices/{id}/readings` | operator key | Implemented |
 | GET | `/v1/devices/{id}/readings/latest` | operator key | Implemented |
-
-### Next (M5, not implemented)
-
-| Method | Path | Auth | Purpose |
-|---|---|---|---|
-| GET | `/v1/alerts` | operator key | list fired alerts, cursor-paginated |
+| GET | `/v1/alerts` | operator key | Implemented (fired alerts, cursor-paginated) |
 
 Rules are stored in `alert_rules` and evaluated inline during ingest (ADR-015).
-Rule CRUD and `POST /v1/alerts/{id}/resolve` remain deferred to keep M5 to one
-vertical slice.
+Rule creation is SQL-only in M5; `POST /v1/alerts/{id}/resolve` remains deferred.
 
 ### Target / deferred
 
@@ -216,13 +210,14 @@ ADR-013).
 - Every error is a typed `ApiError` with an HTTP status and a machine code; no
   `unwrap()` in request handlers.
 - All writes to Postgres go through the `store` crate; handlers never build SQL.
-- A telemetry batch is atomic: the batch row, its readings, and its outbox event
-  commit together or not at all.
-- Event delivery is at-least-once, never exactly-once; consumers dedupe on
-  `outbox.id`. Postgres is the source of truth; Redis is best-effort.
-- Telemetry retries are idempotent by client-supplied `batch_id`; command retries
-  by `(device_id, idempotency_key)`.
-- The latest reading per device is cached in Redis; a cache miss falls back to DB.
+- A telemetry batch is atomic: the batch row, its readings, and any alerts it
+  fires commit together or not at all. The target design adds an outbox event to
+  that transaction (ADR-010); it is deferred in the MVP.
+- Telemetry retries are idempotent by client-supplied `batch_id`; a duplicate
+  batch never fires alerts twice. Command retries (target design) use
+  `(device_id, idempotency_key)`.
+- Postgres is the source of truth. Redis caching and at-least-once outbox
+  delivery are target-design concerns, not implemented in the MVP (ADR-014).
 - Every log line carries `request_id` and `device_id` where applicable.
 - Simulated data is labeled as such; never claim real fleet numbers.
 

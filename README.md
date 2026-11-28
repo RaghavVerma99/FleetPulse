@@ -12,29 +12,35 @@ Built as a portfolio project demonstrating backend engineering for connected-dev
 | M2 Telemetry ingest | Complete | Device auth, validation, atomic batch insert, `batch_id` dedupe |
 | M3 Query APIs | Complete | Device list/detail, readings range + cursor, latest-per-metric |
 | M4 Quality | In progress | DB suite runs in CI; the first run caught a test-key format regression, now fixed. Awaiting a green re-run. |
-| M5 Alerts | Next | Inline threshold evaluation on ingest + `GET /v1/alerts` (ADR-015) |
+| M5 Alerts | Code complete | Inline threshold evaluation, cooldown, `GET /v1/alerts`; awaiting CI verification |
 
 > `scripts/check.sh` runs fmt, clippy `-D warnings`, and DB-free tests. The
 > `#[ignore]` DB-backed tests run in CI against a Postgres service, or locally
 > with `TEST_DATABASE_URL=... bash scripts/check-db.sh`. They use `serial_test`
 > because they share a database.
 
-## Next step: M5 inline alerts
+## M5 inline alerts
 
-The recommended next slice is **inline threshold alerts** (ADR-015), staying
-inside the Postgres-only MVP:
+Implemented inside the Postgres-only MVP (ADR-015):
 
 - `0003_alerts.sql` adds `alert_rules` (device, metric key, operator, threshold,
-  cooldown, enabled) and `alerts` (rule, value, severity, message, timestamps).
+  severity, cooldown, enabled) and `alerts` (rule, value, severity, message,
+  timestamps).
 - Rules are evaluated in the **same transaction** as the readings, so an alert
-  can never exist without its source data.
+  can never exist without its source data. A cooldown suppresses repeat fires.
 - `GET /v1/alerts?device_id=...&limit=...&before=...` uses the operator key and
   the same `{items, next_before}` cursor shape as `/v1/devices`.
-- Deliberate first-pass limits: no alert worker, no Redis/outbox, and no "hold
-  for N seconds" window — a cooldown suppresses repeat fires instead.
+- Deliberate first-pass limits: no alert worker, no Redis/outbox, no rule CRUD
+  endpoint, and no "hold for N seconds" window.
 
-Exit criteria: DB-backed tests for firing, cooldown, and query; a README demo
-showing a rule firing; CI green.
+Rule CRUD stays SQL-only for M5; insert rules with `psql` (see the demo below).
+
+## Next step after M5
+
+Once CI is green, the highest-value follow-ups are a **device provisioning API**
+(one-time key issuance so the demo no longer needs seed SQL) and **rate limiting**
+before any external exposure. Prometheus metrics and Criterion benches remain
+behind their documented triggers in [`docs/MVP.md`](docs/MVP.md).
 
 ## System design
 
@@ -113,6 +119,7 @@ All require `X-Operator-Key: <OPERATOR_API_KEY>`.
 | `GET` | `/v1/devices/{device_id}` | 404 if unknown |
 | `GET` | `/v1/devices/{device_id}/readings` | Query: `from`, `to` (RFC3339), `limit` (1..=200, default 50), `before` (`ts_rfc3339|uuid`) |
 | `GET` | `/v1/devices/{device_id}/readings/latest` | Latest reading per metric key |
+| `GET` | `/v1/alerts` | Query: `device_id`, `limit` (1..=200, default 50), `before` cursor. Returns `{items, next_before}` |
 
 Readings response:
 
@@ -144,14 +151,16 @@ crates/
       config.rs        # env parsing + validation
       error.rs         # ApiError -> status/code/message
       extract.rs       # ValidatedJson<T> extractor
+      pagination.rs    # shared limit + cursor parsing
       routes.rs        # router composition
+      alerts.rs        # operator alert query handler
       devices.rs       # operator query handlers
       telemetry.rs     # ingest handler + boundary validation
       main.rs          # startup, migrate, serve, shutdown
     tests/             # health, telemetry, query integration tests
   domain/              # shared types used by store and api (Device, ApiKey, Reading, ...)
   store/               # DB pool, migrations, SQL queries, auth/ingest/query
-migrations/            # SQL migrations (0001 schema, 0002 indexes)
+migrations/            # SQL migrations (0001 schema, 0002 indexes, 0003 alerts)
 docs/                  # MVP, architecture, decisions, concepts, tech stack
 scripts/               # check.sh, check-db.sh, seed.sql, seed.ps1
 ```
@@ -213,10 +222,21 @@ curl -i -X POST localhost:8080/v1/telemetry \
 curl -i -H 'x-operator-key: dev-operator-key' localhost:8080/v1/devices
 curl -i -H 'x-operator-key: dev-operator-key' localhost:8080/v1/devices/00000000-0000-0000-0000-000000000001/readings?limit=10
 curl -i -H 'x-operator-key: dev-operator-key' localhost:8080/v1/devices/00000000-0000-0000-0000-000000000001/readings/latest
+
+# 4. create a rule (rule CRUD is SQL-only in M5)
+psql "$DATABASE_URL" -c "insert into alert_rules (device_id, metric_key, operator, threshold, severity, cooldown_seconds) values ('00000000-0000-0000-0000-000000000001', 'battery_temp', 'gte', 40, 'critical', 300)"
+
+# 5. ingest a hot reading -> 201, then query alerts -> 200 {"items":[...],"next_before":null}
+curl -i -X POST localhost:8080/v1/telemetry \
+  -H 'content-type: application/json' \
+  -H 'x-device-key: fp_00000000000000000000000000000101_3372f3f3d3804f3191361e0b5ad643fb' \
+  -d '{"batch_id":"22222222-2222-4222-8222-222222222222","readings":[{"ts":"2026-11-28T12:05:00Z","key":"battery_temp","value":42.0}]}'
+curl -i -H 'x-operator-key: dev-operator-key' 'localhost:8080/v1/alerts?device_id=00000000-0000-0000-0000-000000000001'
 ```
 
-The ingest/replay assertions are automated by `seed_key_authenticates_and_batch_is_idempotent`
-in `crates/api/tests/telemetry.rs`.
+The ingest/replay assertions are automated by `seed_key_authenticates_and_batch_is_idempotent`;
+alert firing, cooldown, filtering, and pagination are covered by
+`crates/api/tests/alerts.rs`.
 
 ## Known gaps / tradeoffs
 
