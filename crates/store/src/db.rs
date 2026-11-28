@@ -14,6 +14,8 @@ pub enum DbError {
     Query(#[source] sqlx::Error),
     #[error("conflicting write")]
     Conflict,
+    #[error("invalid data returned from database: {0}")]
+    InvalidData(String),
     #[error("key hash failed: {0}")]
     Hash(String),
 }
