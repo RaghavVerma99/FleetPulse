@@ -1,5 +1,6 @@
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
+use subtle::ConstantTimeEq;
 use uuid::Uuid;
 
 use crate::error::ApiError;
@@ -58,7 +59,12 @@ impl FromRequestParts<AppState> for OperatorAuth {
             .to_str()
             .map_err(|_| ApiError::Unauthorized)?;
 
-        if presented_key != state.operator_api_key {
+        let matches = bool::from(
+            presented_key
+                .as_bytes()
+                .ct_eq(state.operator_api_key.as_bytes()),
+        );
+        if !matches {
             return Err(ApiError::Unauthorized);
         }
 
