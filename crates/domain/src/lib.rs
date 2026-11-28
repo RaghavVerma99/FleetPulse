@@ -6,11 +6,16 @@
 
 #![forbid(unsafe_code)]
 
+mod alert;
 mod api_key;
 mod batch;
 mod device;
 mod reading;
 
+pub use alert::{
+    Alert, AlertRule, AlertSeverity, ThresholdOperator, UnknownAlertSeverity,
+    UnknownThresholdOperator,
+};
 pub use api_key::ApiKey;
 pub use batch::TelemetryBatch;
 pub use device::{Device, DeviceStatus, UnknownDeviceStatus};
