@@ -9,6 +9,7 @@ description = "Postgres persistence layer."
 [dependencies]
 argon2 = { version = "0.5", features = ["std"] }
 chrono = { version = "0.4", features = ["serde"] }
+fleetpulse-domain.workspace = true
 rand_core = { version = "0.6", features = ["getrandom"] }
 serde_json = "1"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono", "json", "migrate", "macros"] }

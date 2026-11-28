@@ -11,9 +11,11 @@ anyhow = "1"
 axum = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
 dotenvy = "0.15"
+fleetpulse-domain.workspace = true
 fleetpulse-store = { version = "0.1.0", path = "../store" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+subtle = "2"
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time", "net"] }
 tower-http = { version = "0.6", features = ["trace", "request-id"] }

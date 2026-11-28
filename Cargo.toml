@@ -12,6 +12,5 @@ edition = "2021"
 rust-version = "1.82"
 publish = false
 
-# Internal crate paths are added to [workspace.dependencies] in Phase 1, when
-# there are real imports. Listing them now only produces unused-dependency
-# warnings.
+[workspace.dependencies]
+fleetpulse-domain = { path = "crates/domain" }

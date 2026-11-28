@@ -400,6 +400,7 @@ dependencies = [
  "axum",
  "chrono",
  "dotenvy",
+ "fleetpulse-domain",
  "fleetpulse-store",
  "http-body-util",
  "rand_core",
@@ -407,6 +408,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "sqlx",
+ "subtle",
  "thiserror",
  "tokio",
  "tower",
@@ -434,6 +436,7 @@ version = "0.1.0"
 dependencies = [
  "argon2",
  "chrono",
+ "fleetpulse-domain",
  "rand_core",
  "serde_json",
  "sqlx",
