@@ -1,7 +1,7 @@
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
 use axum::{Json, Router};
 use chrono::{DateTime, Utc};
+use fleetpulse_domain::{Device, DeviceStatus, Reading};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
@@ -28,6 +28,13 @@ pub fn router() -> Router<AppState> {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct DevicesParams {
+    pub limit: Option<i64>,
+    /// Cursor as `created_at_rfc3339|uuid`.
+    pub before: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ReadingsParams {
     pub from: Option<DateTime<Utc>>,
     pub to: Option<DateTime<Utc>>,
@@ -40,23 +47,29 @@ pub struct ReadingsParams {
 pub struct DeviceResponse {
     pub id: Uuid,
     pub name: String,
-    pub status: String,
+    pub status: DeviceStatus,
     pub firmware_version: Option<String>,
     pub last_seen: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
 }
 
-impl From<fleetpulse_store::DeviceRow> for DeviceResponse {
-    fn from(row: fleetpulse_store::DeviceRow) -> Self {
+impl From<Device> for DeviceResponse {
+    fn from(device: Device) -> Self {
         Self {
-            id: row.id,
-            name: row.name,
-            status: row.status,
-            firmware_version: row.firmware_version,
-            last_seen: row.last_seen,
-            created_at: row.created_at,
+            id: device.id,
+            name: device.name,
+            status: device.status,
+            firmware_version: device.firmware_version,
+            last_seen: device.last_seen,
+            created_at: device.created_at,
         }
     }
+}
+
+#[derive(Debug, Serialize)]
+pub struct DevicesResponse {
+    pub items: Vec<DeviceResponse>,
+    pub next_before: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -70,16 +83,16 @@ pub struct ReadingResponse {
     pub metadata: Value,
 }
 
-impl From<fleetpulse_store::ReadingRow> for ReadingResponse {
-    fn from(row: fleetpulse_store::ReadingRow) -> Self {
+impl From<Reading> for ReadingResponse {
+    fn from(reading: Reading) -> Self {
         Self {
-            id: row.id,
-            device_id: row.device_id,
-            batch_id: row.batch_id,
-            ts: row.ts,
-            key: row.key,
-            value: row.value,
-            metadata: row.metadata,
+            id: reading.id,
+            device_id: reading.device_id,
+            batch_id: reading.batch_id,
+            ts: reading.ts,
+            key: reading.key,
+            value: reading.value,
+            metadata: reading.metadata,
         }
     }
 }
@@ -114,11 +127,40 @@ pub struct ReadingsResponse {
 async fn list_devices(
     State(state): State<AppState>,
     _auth: OperatorAuth,
-) -> Result<Json<Vec<DeviceResponse>>, ApiError> {
-    let devices = fleetpulse_store::list_devices(state.db.pool())
-        .await
-        .map_err(db_err)?;
-    Ok(Json(devices.into_iter().map(Into::into).collect()))
+    Query(params): Query<DevicesParams>,
+) -> Result<Json<DevicesResponse>, ApiError> {
+    let limit = params.limit.unwrap_or(DEFAULT_LIMIT);
+    if !(1..=MAX_LIMIT).contains(&limit) {
+        return Err(ApiError::Validation(format!(
+            "limit must be between 1 and {MAX_LIMIT}"
+        )));
+    }
+
+    let (before_ts, before_id) = parse_before(params.before.as_deref())?;
+    let mut devices = fleetpulse_store::list_devices(
+        state.db.pool(),
+        fleetpulse_store::DevicesQuery {
+            limit: limit + 1,
+            before_ts,
+            before_id,
+        },
+    )
+    .await
+    .map_err(db_err)?;
+
+    let next_before = if devices.len() as i64 > limit {
+        devices.truncate(limit as usize);
+        devices
+            .last()
+            .map(|d| format!("{}|{}", d.created_at.to_rfc3339(), d.id))
+    } else {
+        None
+    };
+
+    Ok(Json(DevicesResponse {
+        items: devices.into_iter().map(Into::into).collect(),
+        next_before,
+    }))
 }
 
 async fn get_device(
@@ -225,12 +267,14 @@ fn parse_before(before: Option<&str>) -> Result<(Option<DateTime<Utc>>, Option<U
 
 fn db_err(error: fleetpulse_store::DbError) -> ApiError {
     tracing::error!(%error, "database query failed");
-    ApiError::Unavailable
-}
-
-/// Exposed for tests that want to assert route presence.
-pub fn _status_ok() -> StatusCode {
-    StatusCode::OK
+    match error {
+        // A value the DB constraint should have prevented is an internal
+        // inconsistency, not a transient dependency failure.
+        fleetpulse_store::DbError::InvalidData(_) => {
+            ApiError::Internal(anyhow::anyhow!("invalid data returned from database"))
+        }
+        _ => ApiError::Unavailable,
+    }
 }
 
 #[cfg(test)]
@@ -251,5 +295,19 @@ mod tests {
     fn rejects_bad_cursor() {
         let err = parse_before(Some("nope")).unwrap_err();
         assert_eq!(err.code(), "validation_failed");
+    }
+
+    #[test]
+    fn device_status_serializes_as_snake_case() {
+        let device = Device {
+            id: Uuid::new_v4(),
+            name: "demo".to_owned(),
+            status: DeviceStatus::Online,
+            firmware_version: None,
+            last_seen: None,
+            created_at: Utc::now(),
+        };
+        let json = serde_json::to_value(DeviceResponse::from(device)).expect("serialize");
+        assert_eq!(json["status"], "online");
     }
 }
