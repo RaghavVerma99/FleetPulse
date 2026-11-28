@@ -2,58 +2,65 @@ use argon2::password_hash::{
     rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString,
 };
 use argon2::Argon2;
-use sqlx::PgPool;
+use chrono::{DateTime, Utc};
+use fleetpulse_domain::ApiKey;
+use sqlx::{FromRow, PgPool};
 use uuid::Uuid;
 
 use crate::db::DbError;
 
+/// A database row projected into the domain `ApiKey` type.
+#[derive(Debug, FromRow)]
+struct ApiKeyRow {
+    id: Uuid,
+    device_id: Uuid,
+    key_hash: String,
+    created_at: DateTime<Utc>,
+    revoked_at: Option<DateTime<Utc>>,
+}
+
 /// Look up the device owning a raw API key.
 ///
-/// `api_keys.key_hash` stores a PHC string (Argon2id). Keys include an embedded
-/// `key_id` prefix (`fp_<uuid>_<secret>`) so we can select one active row by
-/// primary key instead of scanning/verifying all keys. Legacy keys without a
-/// parseable prefix fall back to the old scan for compatibility.
+/// `api_keys.key_hash` stores a PHC string (Argon2id). Keys embed their
+/// `api_keys.id` as `fp_<uuid>_<secret>`, so verification is a single indexed
+/// primary-key lookup plus one Argon2 check.
+///
+/// Unprefixed keys are rejected outright. There are no legacy keys in the MVP
+/// schema; scanning every active key would let an unauthenticated caller
+/// trigger unbounded Argon2 work with a single malformed request.
 pub async fn device_id_for_api_key(
     pool: &PgPool,
     presented_key: &str,
 ) -> Result<Option<Uuid>, DbError> {
-    if let Some(key_id) = parse_key_id(presented_key) {
-        let row: Option<(Uuid, String)> = sqlx::query_as(
-            r#"
-            select device_id, key_hash
-            from api_keys
-            where id = $1 and revoked_at is null
-            "#,
-        )
-        .bind(key_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(DbError::Query)?;
+    let Some(key_id) = parse_key_id(presented_key) else {
+        return Ok(None);
+    };
 
-        let Some((device_id, key_hash)) = row else {
-            return Ok(None);
-        };
-        return Ok(verify_hash(device_id, &key_hash, presented_key).then_some(device_id));
-    }
-
-    let candidates: Vec<(Uuid, String)> = sqlx::query_as(
+    let row: Option<ApiKeyRow> = sqlx::query_as(
         r#"
-        select device_id, key_hash
+        select id, device_id, key_hash, created_at, revoked_at
         from api_keys
-        where revoked_at is null
+        where id = $1 and revoked_at is null
         "#,
     )
-    .fetch_all(pool)
+    .bind(key_id)
+    .fetch_optional(pool)
     .await
     .map_err(DbError::Query)?;
 
-    for (device_id, key_hash) in candidates {
-        if verify_hash(device_id, &key_hash, presented_key) {
-            return Ok(Some(device_id));
-        }
-    }
+    let Some(row) = row else {
+        return Ok(None);
+    };
 
-    Ok(None)
+    let key = ApiKey {
+        id: row.id,
+        device_id: row.device_id,
+        key_hash: row.key_hash,
+        created_at: row.created_at,
+        revoked_at: row.revoked_at,
+    };
+
+    Ok(verify_hash(key.device_id, &key.key_hash, presented_key).then_some(key.device_id))
 }
 
 pub fn generate_device_key(key_id: Uuid) -> String {
@@ -101,6 +108,13 @@ mod tests {
         let key_id = Uuid::new_v4();
         let raw = generate_device_key(key_id);
         assert_eq!(parse_key_id(&raw), Some(key_id));
+    }
+
+    #[test]
+    fn rejects_unprefixed_and_malformed_keys() {
+        assert_eq!(parse_key_id("legacy-secret"), None);
+        assert_eq!(parse_key_id("fp_not-a-uuid_secret"), None);
+        assert_eq!(parse_key_id("fp_"), None);
     }
 
     #[test]
