@@ -119,3 +119,25 @@ concurrency story). **Consequences:** fewer moving parts and a faster path to a
 demo; the deferred pieces are documented with reintroduction triggers in
 `docs/MVP.md`, so this is a deliberate cut rather than an omission.
 
+## ADR-015: Inline threshold evaluation on ingest (proposed for M5)
+**Status: proposed — M5 is the next slice; nothing is implemented yet.**
+**Context:** Alerts are the last core product surface missing from the MVP.
+The target design (ADR-010) evaluates telemetry from a stream in a background
+worker, but there is no worker or Redis in the Postgres-only MVP. Adding one
+now would reintroduce exactly the infrastructure ADR-014 removed.
+**Decision:** store threshold rules in Postgres and evaluate them inside the
+same transaction as the batch insert. A rule matches `(device_id, metric_key)`;
+when the newest value for that key crosses the threshold, insert an `alerts`
+row unless an alert for the same rule fired within its cooldown window. Expose
+fired alerts through `GET /v1/alerts` with operator auth.
+**Alternatives:** (1) a background worker consuming an outbox/stream — more
+correct for "hold for N seconds" semantics, but a second service and a second
+failure mode; (2) scanning readings on every read — cheap to build, but alerts
+would lag queries and duplicate work across requests.
+**Consequences:** an alert is transactionally tied to its source readings, and
+there is no new infrastructure. Tradeoffs: evaluation cost is on the ingest hot
+path (bounded by the number of enabled rules per device), and a rule cannot
+require a condition to hold for a duration — cooldown suppresses duplicates but
+does not implement a time window. If either limitation matters, promote alerts
+to the ADR-010 worker design; the rule/alert schema stays usable.
+

@@ -11,13 +11,30 @@ Built as a portfolio project demonstrating backend engineering for connected-dev
 | M1 Skeleton | Complete | Config, migrations, DB pool, tracing, health, graceful shutdown |
 | M2 Telemetry ingest | Complete | Device auth, validation, atomic batch insert, `batch_id` dedupe |
 | M3 Query APIs | Complete | Device list/detail, readings range + cursor, latest-per-metric |
-| M4 Quality | In progress | CI now runs the DB-backed suite; domain types wired in; sqlx docs corrected. Awaiting a green CI run. |
-| M5 Alerts | Optional | Inline threshold evaluation |
+| M4 Quality | In progress | DB suite runs in CI; the first run caught a test-key format regression, now fixed. Awaiting a green re-run. |
+| M5 Alerts | Next | Inline threshold evaluation on ingest + `GET /v1/alerts` (ADR-015) |
 
 > `scripts/check.sh` runs fmt, clippy `-D warnings`, and DB-free tests. The
 > `#[ignore]` DB-backed tests run in CI against a Postgres service, or locally
 > with `TEST_DATABASE_URL=... bash scripts/check-db.sh`. They use `serial_test`
 > because they share a database.
+
+## Next step: M5 inline alerts
+
+The recommended next slice is **inline threshold alerts** (ADR-015), staying
+inside the Postgres-only MVP:
+
+- `0003_alerts.sql` adds `alert_rules` (device, metric key, operator, threshold,
+  cooldown, enabled) and `alerts` (rule, value, severity, message, timestamps).
+- Rules are evaluated in the **same transaction** as the readings, so an alert
+  can never exist without its source data.
+- `GET /v1/alerts?device_id=...&limit=...&before=...` uses the operator key and
+  the same `{items, next_before}` cursor shape as `/v1/devices`.
+- Deliberate first-pass limits: no alert worker, no Redis/outbox, and no "hold
+  for N seconds" window — a cooldown suppresses repeat fires instead.
+
+Exit criteria: DB-backed tests for firing, cooldown, and query; a README demo
+showing a rule firing; CI green.
 
 ## System design
 
@@ -214,7 +231,7 @@ in `crates/api/tests/telemetry.rs`.
 
 ## Deferred (intentional)
 
-Redis cache/rate-limit, outbox + streams, alert worker, OTA long-poll, Prometheus, Criterion, testcontainers, MQTT, JWT, OpenAPI. Reintroduction triggers are in [`docs/MVP.md`](docs/MVP.md).
+Redis cache/rate-limit, outbox + streams, **background** alert worker, OTA long-poll, Prometheus, Criterion, testcontainers, MQTT, JWT, OpenAPI. Inline alerts are the next slice, not deferred. Reintroduction triggers are in [`docs/MVP.md`](docs/MVP.md).
 
 ## Documentation
 

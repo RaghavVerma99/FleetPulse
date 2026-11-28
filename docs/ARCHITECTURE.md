@@ -4,7 +4,7 @@
 > Postgres-only and deliberately defers Redis, streams/outbox, alerts, and OTA.
 > `docs/MVP.md` is authoritative for what is being built now.
 >
-> **Implementation status (current):** M1/M2/M3 are implemented in code (health, ingest, device/operator auth, query APIs). DB-backed integration tests are wired into CI with a Postgres service; locally they are opt-in via `scripts/check-db.sh`. This environment has no linker, WSL, or Postgres, so CI is the verification path.
+> **Implementation status (current):** M1/M2/M3 are implemented in code (health, ingest, device/operator auth, query APIs). DB-backed integration tests are wired into CI with a Postgres service; locally they are opt-in via `scripts/check-db.sh`. The first CI run caught a test-key format regression, now fixed, and is awaiting a green re-run. **Next:** M5 inline threshold alerts (ADR-015). This environment has no linker, WSL, or Postgres, so CI is the verification path.
 
 ## 1. System overview
 
@@ -184,6 +184,16 @@ unique, `outbox (id) WHERE published_at IS NULL`.
 | GET | `/v1/devices/{id}/readings` | operator key | Implemented |
 | GET | `/v1/devices/{id}/readings/latest` | operator key | Implemented |
 
+### Next (M5, not implemented)
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| GET | `/v1/alerts` | operator key | list fired alerts, cursor-paginated |
+
+Rules are stored in `alert_rules` and evaluated inline during ingest (ADR-015).
+Rule CRUD and `POST /v1/alerts/{id}/resolve` remain deferred to keep M5 to one
+vertical slice.
+
 ### Target / deferred
 
 | Method | Path | Auth | Purpose |
@@ -195,7 +205,6 @@ unique, `outbox (id) WHERE published_at IS NULL`.
 | POST | `/v1/devices/me/commands/{id}/ack` | device key | acknowledge / complete |
 | GET/POST | `/v1/alert-rules` | operator key | list / create rules |
 | PATCH/DELETE | `/v1/alert-rules/{id}` | operator key | update / delete a rule |
-| GET | `/v1/alerts` | operator key | list alerts |
 | POST | `/v1/alerts/{id}/resolve` | operator key | close an alert |
 
 Two credential classes in v1: **device API keys** stored hashed in Postgres, and
