@@ -9,7 +9,7 @@
 | `tokio` | Async runtime — the engine for concurrent I/O |
 | `axum` | HTTP web framework — routing, handlers, middleware |
 | `serde` / `serde_json` | JSON serialization/deserialization |
-| `sqlx` | Async PostgreSQL client with compile-time query checking |
+| `sqlx` | Async PostgreSQL client (queries are runtime-checked in the MVP; see ADR-002) |
 | `uuid` | Stable identifiers for devices/readings/batches |
 | `chrono` | Timestamps (UTC) |
 | `thiserror` / `anyhow` | Typed errors and error propagation |
@@ -50,7 +50,6 @@
 | MQTT (`rumqttc`), `jsonwebtoken` | v2 |
 
 ## Integration notes
-- `validator` is used on request DTOs; M2 currently validates in handlers and maps failures to `ApiError::Validation` (`422`). A reusable `ValidatedJson<T>` extractor can be added in M4.
-- sqlx's compile-time macros need a live database at build time. Commit the
-  `.sqlx/` query cache and set `SQLX_OFFLINE=true` in CI and for fresh clones.
+- `validator` is used on request DTOs. `ValidatedJson<T>` (`crates/api/src/extract.rs`) deserializes, validates, and maps both serde and validator failures to `ApiError::Validation` (`422`); handlers keep only checks a derive cannot express.
+- All queries in `crates/store` use `sqlx::query*()` runtime functions, not the `query*!` macros. There is no `.sqlx/` cache and `SQLX_OFFLINE` is not needed: fresh clones compile without a database, and query errors surface in the DB-backed integration tests instead of at compile time. Switching to macros is tracked by ADR-002 as a future hardening task.
 - Exact resolved versions are tracked in `Cargo.lock`; update this document when dependency policy changes (MSRV bumps, major upgrades, new crates).

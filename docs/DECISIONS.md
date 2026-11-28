@@ -12,10 +12,14 @@ excellent ecosystem, good performance; team must learn async Rust idioms.
 **Context:** Need reliable relational storage for devices, readings, alerts.
 **Decision:** Postgres with sqlx (compile-time checked async SQL).
 **Alternatives:** Diesel (ORM, compile-time but less flexible), DynamoDB (no
-SQL). **Consequences:** SQL matches JD; sqlx catches query errors at compile
-time; migrations managed with `sqlx migrate`.
+SQL). **Consequences:** SQL matches JD; migrations managed with `sqlx migrate`.
+**Current deviation:** the MVP uses `sqlx::query*()` runtime functions rather
+than `query*!` macros, so queries are checked by the DB-backed tests, not at
+compile time. This keeps fresh clones buildable without Postgres; converting to
+macros plus a committed `.sqlx/` cache remains a future hardening task.
 
 ## ADR-003: Redis for cache + streams
+**Status: deferred (ADR-014) — target design, not implemented.**
 **Context:** Good-to-have in JD: caching, queues. **Decision:** Redis for latest
 reading cache, rate-limit counters, and Redis Streams as the event queue.
 **Alternatives:** in-memory cache (lost on restart), RabbitMQ/Kafka (overkill).
@@ -36,28 +40,36 @@ later.
 responses; easier debugging from logs.
 
 ## ADR-006: Observability from day one
+**Status: partially implemented — tracing JSON logs, request ids, and both
+health probes are live; Prometheus `/metrics` and incident replay are deferred.**
 **Context:** JD requires observability and reproducing production issues from
 logs/telemetry. **Decision:** `tracing` structured logs, Prometheus `/metrics`,
 request ids, and an incident-replay script. **Alternatives:** add later.
 **Consequences:** demonstrates operational maturity; small upfront cost.
 
 ## ADR-007: Fixtures + testcontainers integration tests
+**Status: superseded for the MVP — real Postgres runs in CI with `#[ignore]`
+tests; testcontainers is deferred (no Docker in the target environment).**
 **Context:** Need automated testing and realistic DB tests. **Decision:** SQL
 fixtures + `testcontainers` to spin real Postgres/Redis in tests.
 **Alternatives:** mocks only (miss SQL bugs). **Consequences:** tests are slower
 but catch real integration issues; requires a working Docker daemon locally.
 
 ## ADR-008: Benchmarks with Criterion
+**Status: deferred (ADR-014) — not implemented.**
 **Context:** JD mentions benchmarks. **Decision:** Criterion benches for the
 telemetry ingestion hot path and query path. **Alternatives:** no benchmarks.
 **Consequences:** measured performance numbers for the README; shows rigor.
 
 ## ADR-009: Simulated devices, honest labeling
+**Status: deferred — the seed device is simulated; the simulator script is not
+built yet.**
 **Context:** No real fleet. **Decision:** a small device simulator that emits
 telemetry; all data explicitly labeled simulated. **Alternatives:** fake real
 fleet claims. **Consequences:** safe and honest; still demonstrates the system.
 
 ## ADR-010: Transactional outbox for event publishing
+**Status: deferred (ADR-014) — target design; no outbox table or relay exists.**
 **Context:** Telemetry must be written to Postgres *and* published to a Redis
 Stream. Writing to both is a dual write: a crash between them either loses an
 event or produces one for data that never committed. **Decision:** in the same
@@ -69,6 +81,7 @@ accept loss; two-phase commit (overkill); CDC via Debezium (too much infra).
 reliable-messaging pattern and is worth being able to explain.
 
 ## ADR-011: HTTP long-poll for command delivery
+**Status: deferred (ADR-014) — target design; no command endpoints exist.**
 **Context:** Simulated devices sit behind NAT and cannot accept inbound
 connections, so the cloud cannot push to them. **Decision:** devices hold
 `GET /v1/devices/me/commands?wait=30s` open; the server returns a queued command
