@@ -9,6 +9,7 @@ use validator::Validate;
 
 use crate::auth::DeviceAuth;
 use crate::error::ApiError;
+use crate::extract::ValidatedJson;
 use crate::state::AppState;
 
 const MAX_READINGS_PER_BATCH: usize = 1000;
@@ -22,7 +23,7 @@ pub fn router() -> Router<AppState> {
 #[derive(Debug, Deserialize, Serialize, Validate)]
 pub struct TelemetryBatchRequest {
     pub batch_id: Uuid,
-    #[validate(length(min = 1, max = 1000, message = "must contain 1..=1000 readings"))]
+    #[validate(length(min = 1, message = "must contain at least one reading"))]
     #[validate(nested)]
     pub readings: Vec<ReadingRequest>,
 }
@@ -30,7 +31,7 @@ pub struct TelemetryBatchRequest {
 #[derive(Debug, Deserialize, Serialize, Validate)]
 pub struct ReadingRequest {
     pub ts: DateTime<Utc>,
-    #[validate(length(min = 1, max = 128, message = "must be 1..=128 chars"))]
+    #[validate(length(min = 1, message = "must not be empty"))]
     pub key: String,
     pub value: f64,
     #[serde(default = "default_metadata")]
@@ -51,12 +52,8 @@ pub struct IngestResponse {
 async fn ingest_telemetry(
     State(state): State<AppState>,
     auth: DeviceAuth,
-    Json(payload): Json<TelemetryBatchRequest>,
+    ValidatedJson(payload): ValidatedJson<TelemetryBatchRequest>,
 ) -> Result<(StatusCode, Json<IngestResponse>), ApiError> {
-    payload
-        .validate()
-        .map_err(|error| ApiError::Validation(error.to_string()))?;
-
     if payload.readings.len() > MAX_READINGS_PER_BATCH {
         return Err(ApiError::Validation(format!(
             "readings: must contain at most {MAX_READINGS_PER_BATCH} items"
