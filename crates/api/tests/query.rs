@@ -48,7 +48,9 @@ fn hash_key(raw: &str) -> String {
 
 async fn seed_device(db: &Db) -> (Uuid, String) {
     let device_id = Uuid::new_v4();
-    let raw_key = format!("fp_test_{}", Uuid::new_v4().simple());
+    let key_id = Uuid::new_v4();
+    // Keys embed their api_keys.id so auth can use the indexed PK lookup.
+    let raw_key = format!("fp_{}_{}", key_id.simple(), Uuid::new_v4().simple());
     sqlx::query("insert into devices (id, name, status) values ($1, $2, 'provisioning')")
         .bind(device_id)
         .bind(format!("dev-{}", &raw_key[..8]))
@@ -56,7 +58,7 @@ async fn seed_device(db: &Db) -> (Uuid, String) {
         .await
         .expect("insert device");
     sqlx::query("insert into api_keys (id, device_id, key_hash) values ($1, $2, $3)")
-        .bind(Uuid::new_v4())
+        .bind(key_id)
         .bind(device_id)
         .bind(hash_key(&raw_key))
         .execute(db.pool())
