@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 use sqlx::PgPool;
@@ -117,6 +119,21 @@ pub async fn ingest_batch(
     .execute(&mut *tx)
     .await
     .map_err(DbError::Query)?;
+
+    // Evaluate rules against the newest value for each metric in this batch,
+    // in the same transaction (ADR-015).
+    let mut latest_by_key: HashMap<&str, (DateTime<Utc>, f64)> = HashMap::new();
+    for reading in readings {
+        latest_by_key
+            .entry(reading.key.as_str())
+            .and_modify(|current| {
+                if reading.ts >= current.0 {
+                    *current = (reading.ts, reading.value);
+                }
+            })
+            .or_insert((reading.ts, reading.value));
+    }
+    crate::alerts::evaluate_rules(&mut *tx, device_id, &latest_by_key).await?;
 
     tx.commit().await.map_err(DbError::Query)?;
 

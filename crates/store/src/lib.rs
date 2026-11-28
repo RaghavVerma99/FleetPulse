@@ -6,11 +6,13 @@
 
 #![forbid(unsafe_code)]
 
+mod alerts;
 mod auth;
 mod db;
 mod devices;
 mod telemetry;
 
+pub use alerts::{evaluate_rules, list_alerts, AlertsQuery};
 pub use auth::{device_id_for_api_key, generate_device_key, hash_device_key};
 pub use db::{Db, DbError};
 pub use devices::{
